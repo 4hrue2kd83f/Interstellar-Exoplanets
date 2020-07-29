@@ -1,24 +1,15 @@
 buildscript {
-
 	repositories {
-
 		jcenter()
-
-		maven {
-
-			url = 'http://files.minecraftforge.net/maven'
-		}
-		maven {
-			name = 'gradle'
-			url 'https://plugins.gradle.org/m2/'
-		}
+		maven { url = 'http://files.minecraftforge.net/maven' }
+		maven { url 'https://plugins.gradle.org/m2/' }
 	}
-
 	dependencies {
-
-		classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+		classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '3.+', changing: true
 	}
 }
+
+import net.minecraftforge.gradle.common.task.SignJar
 
 plugins {
 	id 'com.matthewprenger.cursegradle' version '1.4.0'
@@ -27,9 +18,10 @@ plugins {
 	id "io.freefair.lombok" version "2.9.5"
 	id "maven-publish"
 	id 'jacoco'
+	id "com.diffplug.spotless" version "5.1.0"
 }
 
-apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'maven-publish'
 apply plugin: 'eclipse'
 apply plugin: 'idea'
@@ -108,7 +100,6 @@ ext {
 	v = "${mod_version}." + getBuildNumber()
 }
 
-apply from: 'gradle/artifacts.gradle'
 apply from: 'gradle/deps.gradle'
 apply from: 'gradle/restcall.gradle'
 apply from: 'gradle/changelog.gradle'
@@ -131,33 +122,72 @@ idea.module {
 
 minecraft {
 
-	version = "${forge_mc_version}-${forge_version}"
-	mappings = "${mcp_mappings_version}"
-	runDir = 'run'
+    mappings channel: 'snapshot', version: '20171003-1.12'
 
-	replace '@BUILD@', getBuildNumber()
-	replace '@VERSION@', short_version
-	replaceIn "${mod_class}.java"
+    accessTransformer = file('src/main/resources/META-INF/exoplanets_at.cfg.cfg')
+
+    // Default run configurations.
+    // These can be tweaked, removed, or duplicated as needed.
+    runs {
+        client {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+
+            // Recommended logging level for the console
+            property 'forge.logging.console.level', 'debug'
+
+            jvmArg '-Dfml.coreMods.load=micdoodle8.mods.miccore.MicdoodlePlugin'
+        }
+
+        server {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+
+            // Recommended logging level for the console
+            property 'forge.logging.console.level', 'debug'
+
+            jvmArg '-Dfml.coreMods.load=micdoodle8.mods.miccore.MicdoodlePlugin'
+        }
+    }
+}
+
+dependencies {
+	minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2854'
+	
 }
 
 processResources {
+    from(sourceSets.main.resources.srcDirs) {
+        include 'META-INF/mods.toml'
 
-	inputs.property "version", project.version
-	inputs.property "mcversion", project.minecraft.version
+        expand 'version': project.version
+    }
 
-	from(sourceSets.main.resources.srcDirs) {
-
-		include 'mcmod.info'
-		expand 'version':project.version, 'mcversion':project.minecraft.version
-	}
-
-	from(sourceSets.main.resources.srcDirs) {
-
-		exclude 'mcmod.info'
-	}
-
-	from 'LICENSE'
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'META-INF/mods.toml', '**/psd/**'
+    }
 }
+
+apply from: 'gradle/artifacts.gradle'
+
+//[jar, sourcesJar, deobfJar, apiJar].each { t -> 
+//	task "sign${t.name}"(type: SignJar, dependsOn: t) {
+//		keyStore = project.findProperty('keyStore')
+//		alias = project.findProperty('keyStoreAlias')
+//		storePass = project.findProperty('keyStorePass')
+//		keyPass = project.findProperty('keyStoreKeyPass')
+//        inputFile = t.archivePath
+//        outputFile = t.archivePath
+//        doFirst {
+//            project.logger.lifecycle('Signing: ' + inputFile)
+//        }
+//    }
+//    t.finalizedBy(tasks.getByName("sign${t.name}"))
+//}
 
 //Shuts up javadoc failures
 if (JavaVersion.current().isJava8Compatible()) {
@@ -412,8 +442,4 @@ task incrementBuild {
 	}
 }
 
-build.dependsOn signJar
 build.finalizedBy incrementBuild // only increment on successful builds
-tasks.build.dependsOn signJar
-tasks.publish.dependsOn build
-tasks.curseforge.dependsOn build, postRelease
